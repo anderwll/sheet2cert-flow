@@ -28,6 +28,7 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
         toast({
           title: 'Certificados emitidos com sucesso!',
           description: `${validData.length} certificado(s) foram enviados para emissão.`,
+          variant: 'success',
         });
       } else {
         toast({
