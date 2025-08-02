@@ -1,6 +1,6 @@
 import axios from "axios";
-import type { EmissionData, EmissionResponse, EmissionRequest } from "@/@types";
 import { api } from "./api";
+import type { EmissionData, EmissionResponse, EmissionRequest } from "@/@types";
 
 /**
  * Service for certificate emission
@@ -13,12 +13,7 @@ export class EmissionService {
     data: EmissionData[]
   ): Promise<EmissionResponse> {
     try {
-      const requestData: EmissionRequest = { data };
-
-      const response = await api.post<EmissionResponse>(
-        "/emission",
-        requestData
-      );
+      const response = await api.post<EmissionResponse>("/emission", data);
 
       return response.data;
     } catch (error) {
@@ -40,28 +35,6 @@ export class EmissionService {
         success: false,
         message: error instanceof Error ? error.message : "Erro desconhecido",
       };
-    }
-  }
-
-  /**
-   * Send single certificate emission
-   */
-  static async emitSingleCertificate(
-    data: EmissionData
-  ): Promise<EmissionResponse> {
-    return this.emitCertificates([data]);
-  }
-
-  /**
-   * Test API connection
-   */
-  static async testConnection(): Promise<boolean> {
-    try {
-      await api.get("/health");
-      return true;
-    } catch (error) {
-      console.error("API connection test failed:", error);
-      return false;
     }
   }
 }
