@@ -40,8 +40,8 @@ const SpreadsheetUpload = () => {
   };
 
   const formatName = (name: string): string => {
-    // Remove 'copy' (case insensitive) e converte para uppercase
-    return name.replace(/copy/gi, '').trim().toUpperCase();
+    // Remove 'copy' e variações (case insensitive) e converte para uppercase
+    return name.replace(/\s*copy\s*\d*$/gi, '').trim().toUpperCase();
   };
 
   const isValidEmail = (email: string): boolean => {
@@ -49,24 +49,72 @@ const SpreadsheetUpload = () => {
     return emailRegex.test(email);
   };
 
-  const processData = (rawData: PersonData[]): ProcessedData[] => {
+  const identifyColumns = (headers: string[]): { [key: string]: string } => {
+    const mapping: { [key: string]: string } = {};
+    
+    headers.forEach(header => {
+      const normalizedHeader = header.toLowerCase().trim();
+      
+      // Mapeamento de nomes
+      if (['nome', 'name', 'aluno', 'estudante', 'participante'].some(variant => 
+        normalizedHeader.includes(variant))) {
+        mapping['nome'] = header;
+      }
+      
+      // Mapeamento de CPF
+      if (['cpf', 'documento', 'doc'].some(variant => 
+        normalizedHeader.includes(variant))) {
+        mapping['cpf'] = header;
+      }
+      
+      // Mapeamento de telefone
+      if (['telefone', 'phone', 'celular', 'cel', 'fone', 'whatsapp'].some(variant => 
+        normalizedHeader.includes(variant))) {
+        mapping['telefone'] = header;
+      }
+      
+      // Mapeamento de certificado
+      if (['certificado', 'certificate', 'certificar', 'emitir', 'gerar'].some(variant => 
+        normalizedHeader.includes(variant))) {
+        mapping['certificado'] = header;
+      }
+      
+      // Mapeamento de email
+      if (['email', 'e-mail', 'mail', 'correio'].some(variant => 
+        normalizedHeader.includes(variant))) {
+        mapping['email'] = header;
+      }
+    });
+    
+    return mapping;
+  };
+
+  const processData = (rawData: any[], columnMapping: { [key: string]: string }): ProcessedData[] => {
     const processed = rawData
-      .filter(row => row.certificado?.toLowerCase() === 'sim')
+      .filter(row => {
+        const certificadoValue = row[columnMapping['certificado']]?.toString().toLowerCase().trim();
+        return ['sim', 's', 'yes', 'y', '1', 'true'].includes(certificadoValue);
+      })
       .map(row => {
         const errors: string[] = [];
         
-        const processedName = formatName(row.nome || '');
-        const processedCPF = formatCPF(row.cpf || '');
-        const email = row.email?.trim() || '';
+        const rawName = row[columnMapping['nome']] || '';
+        const rawCPF = row[columnMapping['cpf']] || '';
+        const rawEmail = row[columnMapping['email']] || '';
+        const rawTelefone = row[columnMapping['telefone']] || '';
         
-        if (!processedName) errors.push('Nome inválido');
-        if (processedCPF.length !== 14) errors.push('CPF inválido');
+        const processedName = formatName(rawName.toString());
+        const processedCPF = formatCPF(rawCPF.toString());
+        const email = rawEmail.toString().trim();
+        
+        if (!processedName || processedName.length < 2) errors.push('Nome inválido');
+        if (processedCPF.length !== 14 || !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(processedCPF)) errors.push('CPF inválido');
         if (!isValidEmail(email)) errors.push('E-mail inválido');
         
         return {
           nome: processedName,
           cpf: processedCPF,
-          telefone: row.telefone || '',
+          telefone: rawTelefone.toString(),
           email: email,
           isValid: errors.length === 0,
           errors
@@ -90,15 +138,40 @@ const SpreadsheetUpload = () => {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as PersonData[];
-
-        const processed = processData(jsonData);
-        const invalidEmails = processed.filter(item => !item.isValid && item.errors.includes('E-mail inválido'));
         
-        if (invalidEmails.length > 0) {
+        // Obter os dados com headers originais
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+        
+        if (jsonData.length === 0) {
+          throw new Error('Planilha vazia');
+        }
+
+        // Identificar automaticamente as colunas
+        const headers = Object.keys(jsonData[0] as any);
+        const columnMapping = identifyColumns(headers);
+        
+        // Verificar se todas as colunas obrigatórias foram identificadas
+        const requiredColumns = ['nome', 'cpf', 'email', 'certificado'];
+        const missingColumns = requiredColumns.filter(col => !columnMapping[col]);
+        
+        if (missingColumns.length > 0) {
           toast({
-            title: "E-mails inválidos encontrados",
-            description: `${invalidEmails.length} registro(s) com e-mail inválido foram descartados.`,
+            title: "Colunas obrigatórias não encontradas",
+            description: `Não foi possível identificar: ${missingColumns.join(', ')}. Verifique os nomes das colunas.`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        console.log('Mapeamento de colunas:', columnMapping);
+        
+        const processed = processData(jsonData, columnMapping);
+        const invalidCount = processed.filter(item => !item.isValid).length;
+        
+        if (invalidCount > 0) {
+          toast({
+            title: "Registros com problemas encontrados",
+            description: `${invalidCount} registro(s) com problemas foram identificados.`,
             variant: "destructive",
           });
         }
@@ -113,7 +186,7 @@ const SpreadsheetUpload = () => {
       } catch (error) {
         toast({
           title: "Erro ao processar planilha",
-          description: "Verifique se o arquivo está no formato correto.",
+          description: error instanceof Error ? error.message : "Verifique se o arquivo está no formato correto.",
           variant: "destructive",
         });
         console.error('Erro ao processar arquivo:', error);
@@ -133,7 +206,7 @@ const SpreadsheetUpload = () => {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-3 bg-gradient-primary text-primary-foreground px-6 py-3 rounded-full shadow-glow">
+          <div className="inline-flex items-center gap-3 bg-card text-foreground px-6 py-3 rounded-full shadow-card border">
             <FileSpreadsheet className="w-6 h-6" />
             <h1 className="text-2xl font-bold">Sistema de Certificados</h1>
           </div>
