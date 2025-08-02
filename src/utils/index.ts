@@ -12,3 +12,9 @@ export {
 
 // Spreadsheet processing
 export { identifyColumns, processData, calculateStats } from "./spreadsheet";
+
+// Converters
+export {
+  convertToEmissionData,
+  convertToEmissionDataArray,
+} from "./converters";
