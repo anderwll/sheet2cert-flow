@@ -57,7 +57,7 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
           Aprovados para emissão ({validData.length})
         </CardTitle>
         <CardDescription>
-          Estes registros serão processados para gerar os certificados
+          Estes registros estão aptos para serem emitidos o certificado.
         </CardDescription>
       </CardHeader>
       <CardContent>

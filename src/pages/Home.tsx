@@ -26,7 +26,7 @@ const Home = () => {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-3 bg-card text-foreground px-6 py-3 rounded-full shadow-card border">
+          <div className="inline-flex items-center gap-3 bg-card text-foreground px-6 py-3 rounded-full shadow-card">
             <FileSpreadsheet className="w-6 h-6" />
             <h1 className="text-2xl font-bold">Sistema de Certificados</h1>
           </div>
