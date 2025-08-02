@@ -20,6 +20,7 @@ interface ProcessedData {
   email: string;
   isValid: boolean;
   errors: string[];
+  willEmit: boolean; // Indica se o certificado será emitido
 }
 
 const SpreadsheetUpload = () => {
@@ -117,38 +118,39 @@ const SpreadsheetUpload = () => {
     return mapping;
   };
 
-  const processData = (rawData: any[], columnMapping: { [key: string]: string }): ProcessedData[] => {
-    const processed = rawData
-      .filter(row => {
-        const certificadoValue = row[columnMapping['certificado']]?.toString().toLowerCase().trim();
-        return ['sim', 's', 'yes', 'y', '1', 'true'].includes(certificadoValue);
-      })
-      .map(row => {
-        const errors: string[] = [];
+  const processData = (rawData: Record<string, unknown>[], columnMapping: { [key: string]: string }): ProcessedData[] => {
+    const processed = rawData.map(row => {
+      const errors: string[] = [];
 
-        const rawName = row[columnMapping['nome']] || '';
-        const rawCPF = row[columnMapping['cpf']] || '';
-        const rawEmail = row[columnMapping['email']] || '';
-        const rawTelefone = row[columnMapping['telefone']] || '';
+      const rawName = row[columnMapping['nome']] || '';
+      const rawCPF = row[columnMapping['cpf']] || '';
+      const rawEmail = row[columnMapping['email']] || '';
+      const rawTelefone = row[columnMapping['telefone']] || '';
+      const rawCertificado = row[columnMapping['certificado']] || '';
 
-        const processedName = formatName(rawName.toString());
-        const processedCPF = formatCPF(rawCPF.toString());
-        const processedPhone = formatPhone(rawTelefone.toString());
-        const email = rawEmail.toString().trim();
+      const processedName = formatName(rawName.toString());
+      const processedCPF = formatCPF(rawCPF.toString());
+      const processedPhone = formatPhone(rawTelefone.toString());
+      const email = rawEmail.toString().trim();
 
-        if (!processedName || processedName.length < 2) errors.push('Nome inválido');
-        if (processedCPF.length !== 14 || !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(processedCPF)) errors.push('CPF inválido');
-        if (!isValidEmail(email)) errors.push('E-mail inválido');
+      // Verifica se o certificado será emitido
+      const certificadoValue = rawCertificado.toString().toLowerCase().trim();
+      const willEmit = ['sim', 's', 'yes', 'y', '1', 'true'].includes(certificadoValue);
 
-        return {
-          nome: processedName,
-          cpf: processedCPF,
-          telefone: processedPhone,
-          email: email,
-          isValid: errors.length === 0,
-          errors
-        };
-      });
+      if (!processedName || processedName.length < 2) errors.push('Nome inválido');
+      if (processedCPF.length !== 14 || !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(processedCPF)) errors.push('CPF inválido');
+      if (!isValidEmail(email)) errors.push('E-mail inválido');
+
+      return {
+        nome: processedName,
+        cpf: processedCPF,
+        telefone: processedPhone,
+        email: email,
+        isValid: errors.length === 0,
+        errors,
+        willEmit
+      };
+    });
 
     return processed;
   };
@@ -169,14 +171,14 @@ const SpreadsheetUpload = () => {
         const worksheet = workbook.Sheets[sheetName];
 
         // Obter os dados com headers originais
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as Record<string, unknown>[];
 
         if (jsonData.length === 0) {
           throw new Error('Planilha vazia');
         }
 
         // Identificar automaticamente as colunas
-        const headers = Object.keys(jsonData[0] as any);
+        const headers = Object.keys(jsonData[0]);
         const columnMapping = identifyColumns(headers);
 
         // Verificar se todas as colunas obrigatórias foram identificadas
@@ -227,7 +229,14 @@ const SpreadsheetUpload = () => {
     reader.readAsArrayBuffer(file);
   }, [toast]);
 
-  const validData = uploadedData.filter(item => item.isValid);
+  // Statistics
+  const totalRecords = uploadedData.length;
+  const approvedForEmission = uploadedData.filter(item => item.isValid && item.willEmit);
+  const rejectedForEmission = uploadedData.filter(item => item.isValid && !item.willEmit);
+  const invalidRecords = uploadedData.filter(item => !item.isValid);
+
+  // Keep compatibility with existing code
+  const validData = uploadedData.filter(item => item.isValid && item.willEmit);
   const invalidData = uploadedData.filter(item => !item.isValid);
 
   return (
@@ -293,14 +302,14 @@ const SpreadsheetUpload = () => {
 
         {/* Statistics */}
         {uploadedData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="bg-gradient-card shadow-card border-border/50">
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="p-3 bg-primary/10 rounded-full">
                   <Users className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{uploadedData.length}</p>
+                  <p className="text-2xl font-bold text-foreground">{totalRecords}</p>
                   <p className="text-sm text-muted-foreground">Total de registros</p>
                 </div>
               </CardContent>
@@ -312,8 +321,20 @@ const SpreadsheetUpload = () => {
                   <CheckCircle className="w-6 h-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{validData.length}</p>
-                  <p className="text-sm text-muted-foreground">Registros válidos</p>
+                  <p className="text-2xl font-bold text-foreground">{approvedForEmission.length}</p>
+                  <p className="text-sm text-muted-foreground">Aprovados para emissão</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-card shadow-card border-border/50">
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="p-3 bg-warning/10 rounded-full">
+                  <AlertCircle className="w-6 h-6 text-warning" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{rejectedForEmission.length}</p>
+                  <p className="text-sm text-muted-foreground">Rejeitados para emissão</p>
                 </div>
               </CardContent>
             </Card>
@@ -324,8 +345,8 @@ const SpreadsheetUpload = () => {
                   <AlertCircle className="w-6 h-6 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{invalidData.length}</p>
-                  <p className="text-sm text-muted-foreground">Registros inválidos</p>
+                  <p className="text-2xl font-bold text-foreground">{invalidRecords.length}</p>
+                  <p className="text-sm text-muted-foreground">Registros Inválidos</p>
                 </div>
               </CardContent>
             </Card>
@@ -391,6 +412,60 @@ const SpreadsheetUpload = () => {
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Rejected Records */}
+        {rejectedForEmission.length > 0 && (
+          <Card className="bg-gradient-card shadow-card border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-warning">
+                <AlertCircle className="w-5 h-5" />
+                Registros Rejeitados ({rejectedForEmission.length})
+              </CardTitle>
+              <CardDescription>
+                Estes registros são válidos mas não terão certificados emitidos
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left p-3 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          Nome
+                        </div>
+                      </th>
+                      <th className="text-left p-3 font-semibold">CPF</th>
+                      <th className="text-left p-3 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          Telefone
+                        </div>
+                      </th>
+                      <th className="text-left p-3 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4" />
+                          E-mail
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rejectedForEmission.map((item, index) => (
+                      <tr key={index} className="border-b border-border/50 hover:bg-background/50">
+                        <td className="p-3">{item.nome}</td>
+                        <td className="p-3 font-mono">{item.cpf}</td>
+                        <td className="p-3">{item.telefone}</td>
+                        <td className="p-3">{item.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         )}
