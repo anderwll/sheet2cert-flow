@@ -359,7 +359,7 @@ const SpreadsheetUpload = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-success">
                 <CheckCircle className="w-5 h-5" />
-                Registros Válidos ({validData.length})
+                Aprovados para emissão ({validData.length})
               </CardTitle>
               <CardDescription>
                 Estes registros serão processados para gerar os certificados
