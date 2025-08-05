@@ -17,6 +17,7 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isEmitted, setIsEmitted] = useState(false);
   const { toast } = useToast();
 
   if (validData.length === 0) return null;
@@ -33,6 +34,7 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
       if (response.success) {
         setIsLoading(false);
         setIsSuccess(true);
+        setIsEmitted(true);
         setSuccessMessage(response.message || 'Certificados emitidos com sucesso!');
         
         // Auto close modal after 3 seconds
@@ -64,10 +66,13 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-success">
           <CheckCircle className="w-5 h-5" />
-          Aprovados para emissão ({validData.length})
+          {isEmitted ? 'Certificados emitidos' : `Aprovados para emissão`} ({validData.length})
         </CardTitle>
         <CardDescription>
-          Estes registros estão aptos para serem emitidos o certificado.
+          {isEmitted 
+            ? 'Todos os certificados foram emitidos com sucesso.' 
+            : 'Estes registros estão aptos para serem emitidos o certificado.'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -94,6 +99,14 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
                     E-mail
                   </div>
                 </th>
+                {isEmitted && (
+                  <th className="text-left p-3 font-semibold">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      Status
+                    </div>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -103,13 +116,21 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
                   <td className="p-3 font-mono">{item.cpf}</td>
                   <td className="p-3">{item.telefone}</td>
                   <td className="p-3">{item.email}</td>
+                  {isEmitted && (
+                    <td className="p-3">
+                      <span className="inline-flex items-center gap-1 text-success">
+                        <CheckCircle className="w-4 h-4" />
+                        Emitido
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {validData.length > 0 && (
+        {validData.length > 0 && !isEmitted && (
           <div className="mt-6 flex justify-center">
             <Button
               className="bg-gradient-primary shadow-glow hover:shadow-glow/70"
