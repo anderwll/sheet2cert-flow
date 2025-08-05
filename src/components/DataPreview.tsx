@@ -1,36 +1,47 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, FileText, User, Phone, Mail, Loader2 } from 'lucide-react';
+import { CheckCircle, FileText, User, Phone, Mail } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import type { ProcessedData } from '@/@types';
 import { EmissionService } from '@/services';
 import { convertToEmissionDataArray } from '@/utils';
+import EmissionModal from './EmissionModal';
 
 interface DataPreviewProps {
   validData: ProcessedData[];
 }
 
 const DataPreview = ({ validData }: DataPreviewProps) => {
-  const [isEmitting, setIsEmitting] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const { toast } = useToast();
 
   if (validData.length === 0) return null;
 
   const handleEmitCertificates = async () => {
-    setIsEmitting(true);
+    setIsModalOpen(true);
+    setIsLoading(true);
+    setIsSuccess(false);
 
     try {
       const emissionData = convertToEmissionDataArray(validData);
       const response = await EmissionService.emitCertificates(emissionData);
 
       if (response.success) {
-        toast({
-          title: 'Certificados emitidos com sucesso!',
-          description: `${validData.length} certificado(s) foram enviados para emissão.`,
-          variant: 'success',
-        });
+        setIsLoading(false);
+        setIsSuccess(true);
+        setSuccessMessage(response.message || 'Certificados emitidos com sucesso!');
+        
+        // Auto close modal after 3 seconds
+        setTimeout(() => {
+          setIsModalOpen(false);
+          setIsSuccess(false);
+        }, 3000);
       } else {
+        setIsModalOpen(false);
         toast({
           title: 'Erro ao emitir certificados',
           description: response.message,
@@ -38,14 +49,13 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
         });
       }
     } catch (error) {
+      setIsModalOpen(false);
       toast({
         title: 'Erro ao emitir certificados',
         description: 'Ocorreu um erro inesperado. Tente novamente.',
         variant: 'destructive',
       });
       console.error('Erro ao emitir certificados:', error);
-    } finally {
-      setIsEmitting(false);
     }
   };
 
@@ -104,17 +114,21 @@ const DataPreview = ({ validData }: DataPreviewProps) => {
             <Button
               className="bg-gradient-primary shadow-glow hover:shadow-glow/70"
               onClick={handleEmitCertificates}
-              disabled={isEmitting}
+              disabled={isLoading}
             >
-              {isEmitting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <FileText className="w-4 h-4 mr-2" />
-              )}
-              {isEmitting ? 'Emitindo...' : `Gerar Certificados (${validData.length})`}
+              <FileText className="w-4 h-4 mr-2" />
+              Emitir certificados ({validData.length})
             </Button>
           </div>
         )}
+        
+        <EmissionModal
+          isOpen={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          isLoading={isLoading}
+          isSuccess={isSuccess}
+          successMessage={successMessage}
+        />
       </CardContent>
     </Card>
   );
